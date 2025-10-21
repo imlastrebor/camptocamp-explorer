@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getRoute, pickLocale } from "@/lib/c2c";
+import { formatLocaleTitle, getRoute, pickLocale } from "@/lib/c2c";
 
 type RoutePageProps = {
   params: { id: string };
@@ -22,7 +22,7 @@ function sanitizeDescription(description?: string) {
 export default async function RoutePage({ params }: RoutePageProps) {
   const route = await getRoute(params.id);
   const locale = pickLocale(route.locales);
-  const title = locale?.title ?? `Route ${params.id}`;
+  const title = formatLocaleTitle(locale) ?? `Route ${params.id}`;
   const description = sanitizeDescription(locale?.description);
 
   return (

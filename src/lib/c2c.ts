@@ -2,11 +2,12 @@ import { DEFAULT_LIMIT } from "./search";
 
 const BASE_URL = "https://api.camptocamp.org";
 
-type Locale = {
+export type Locale = {
   lang?: string;
   title?: string;
   description?: string;
   summary?: string | null;
+  title_prefix?: string | null;
 };
 
 export type C2CRoute = {
@@ -81,6 +82,21 @@ export function pickLocale(
   }
 
   return locales[0];
+}
+
+export function formatLocaleTitle(locale?: Locale) {
+  if (!locale) {
+    return undefined;
+  }
+
+  const prefix = locale.title_prefix?.trim();
+  const title = locale.title?.trim();
+
+  if (prefix && title) {
+    return `${prefix} : ${title}`;
+  }
+
+  return title ?? prefix ?? undefined;
 }
 
 export async function listRoutes(
