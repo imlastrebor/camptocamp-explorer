@@ -3,8 +3,10 @@ import { DEFAULT_LIMIT } from "./search";
 const BASE_URL = "https://api.camptocamp.org";
 
 type Locale = {
+  lang?: string;
   title?: string;
   description?: string;
+  summary?: string | null;
 };
 
 export type C2CRoute = {
@@ -60,6 +62,26 @@ const CHAMONIX_BBOX = `${MIN_X},${MIN_Y},${MAX_X},${MAX_Y}`;
 
 export const DEFAULT_ACTIVITIES =
   "alpine_climbing,rock_climbing,skitouring";
+
+const PREFERRED_LOCALES = ["en", "fr", "it", "es"];
+
+export function pickLocale(
+  locales?: Locale[],
+  preferred: string[] = PREFERRED_LOCALES,
+) {
+  if (!locales || locales.length === 0) {
+    return undefined;
+  }
+
+  for (const language of preferred) {
+    const match = locales.find((locale) => locale.lang === language);
+    if (match) {
+      return match;
+    }
+  }
+
+  return locales[0];
+}
 
 export async function listRoutes(
   options: ListRoutesOptions = {},

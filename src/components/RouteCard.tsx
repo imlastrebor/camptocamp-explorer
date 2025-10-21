@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { C2CRoute } from "@/lib/c2c";
+import { pickLocale } from "@/lib/c2c";
 import { Button } from "@/components/ui/button";
 
 type RouteCardProps = {
@@ -15,7 +16,7 @@ type RouteCardProps = {
 };
 
 export function RouteCard({ route }: RouteCardProps) {
-  const locale = route.locales?.[0];
+  const locale = pickLocale(route.locales);
   const title = locale?.title ?? `Route ${route.document_id}`;
   const activities = route.activities?.join(" · ") ?? "Activity unknown";
   const rawDescription = locale?.description
