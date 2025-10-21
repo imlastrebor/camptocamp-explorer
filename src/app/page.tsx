@@ -1,103 +1,189 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Filters } from "@/components/Filters";
+import { RouteCard } from "@/components/RouteCard";
+import { Button } from "@/components/ui/button";
+import { DEFAULT_ACTIVITIES, listRoutes } from "@/lib/c2c";
+import { DEFAULT_LIMIT, LIMIT_OPTIONS } from "@/lib/search";
 
-export default function Home() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function toSingleValue(value?: string | string[]) {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+}
+
+function sanitizeLimit(rawValue?: string) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_LIMIT;
+  }
+  if (LIMIT_OPTIONS.includes(parsed)) {
+    return parsed;
+  }
+  return DEFAULT_LIMIT;
+}
+
+function sanitizeOffset(rawValue?: string, limit = DEFAULT_LIMIT) {
+  const parsed = Number(rawValue ?? 0);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return Math.floor(parsed / limit) * limit;
+}
+
+function deriveFallbackQuery(query: string) {
+  const tokens = query
+    .split(/\s+/)
+    .map((token) => token.replace(/[^A-Za-z0-9]/g, ""))
+    .filter((token) => token.length > 2);
+
+  if (tokens.length === 0) {
+    return undefined;
+  }
+
+  tokens.sort((a, b) => b.length - a.length);
+  return tokens[0];
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: SearchParams | Promise<SearchParams>;
+}) {
+  const params = (await searchParams) ?? {};
+
+  const qRaw = toSingleValue(params.q);
+  const q = qRaw?.trim() ?? "";
+  const act = toSingleValue(params.act)?.trim() || DEFAULT_ACTIVITIES;
+  const limit = sanitizeLimit(toSingleValue(params.limit));
+  const offset = sanitizeOffset(toSingleValue(params.offset), limit);
+
+  let data = await listRoutes({ q, act, limit, offset });
+  let effectiveOffset = data.offset ?? offset;
+  let fallbackMessage: string | undefined;
+
+  if (q && data.total === 0) {
+    const fallbackQuery = deriveFallbackQuery(q);
+    if (fallbackQuery && fallbackQuery !== q) {
+      let fallbackData = await listRoutes({
+        q: fallbackQuery,
+        act,
+        limit,
+        offset,
+      });
+
+      if (fallbackData.total === 0 && offset > 0) {
+        fallbackData = await listRoutes({
+          q: fallbackQuery,
+          act,
+          limit,
+          offset: 0,
+        });
+      }
+
+      if (fallbackData.total > 0) {
+        data = fallbackData;
+        effectiveOffset = fallbackData.offset ?? 0;
+        fallbackMessage = `No exact matches for "${q}". Showing results for "${fallbackQuery}".`;
+      }
+    }
+  }
+
+  const total = data.total;
+  const hasPrev = effectiveOffset > 0;
+  const hasNext = effectiveOffset + data.documents.length < total;
+  const prevOffset = Math.max(0, effectiveOffset - limit);
+  const nextOffset = effectiveOffset + limit;
+
+  const buildHref = (newOffset: number) => {
+    const nextParams = new URLSearchParams();
+
+    if (q) nextParams.set("q", q);
+    if (act) nextParams.set("act", act);
+    if (limit !== DEFAULT_LIMIT) nextParams.set("limit", String(limit));
+    nextParams.set("offset", String(newOffset));
+
+    return `/?${nextParams.toString()}`;
+  };
+
+  const start = data.documents.length > 0 ? effectiveOffset + 1 : 0;
+  const end = effectiveOffset + data.documents.length;
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
+      <header className="space-y-2">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Camptocamp Explorer
+          </p>
+          <h1 className="text-3xl font-semibold">Chamonix routes</h1>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <p className="text-sm text-muted-foreground">
+          A lightweight index of classic Camptocamp routes leveraging the public
+          v6 API and server components.
+        </p>
+      </header>
+
+      <Filters />
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            {total === 0
+              ? "No routes found for the current filters."
+              : `Showing ${start}–${end} of ${total.toLocaleString()} routes`}
+          </span>
+          <span>Fetching {limit} at a time</span>
+        </div>
+
+        {fallbackMessage && (
+          <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+            {fallbackMessage}
+          </div>
+        )}
+
+        {data.documents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+            Adjust your search or try a different activity preset.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {data.documents.map((route) => (
+              <RouteCard key={route.document_id} route={route} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <nav className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2">
+          {hasPrev ? (
+            <Button asChild variant="outline">
+              <Link href={buildHref(prevOffset)}>← Previous</Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              ← Previous
+            </Button>
+          )}
+
+          {hasNext ? (
+            <Button asChild variant="outline">
+              <Link href={buildHref(nextOffset)}>Next →</Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              Next →
+            </Button>
+          )}
+        </div>
+
+        <span className="text-sm text-muted-foreground">
+          Page {Math.floor(effectiveOffset / limit) + 1}
+        </span>
+      </nav>
+    </main>
   );
 }

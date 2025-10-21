@@ -1,0 +1,50 @@
+import Link from "next/link";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import type { C2CRoute } from "@/lib/c2c";
+import { Button } from "@/components/ui/button";
+
+type RouteCardProps = {
+  route: C2CRoute;
+};
+
+export function RouteCard({ route }: RouteCardProps) {
+  const locale = route.locales?.[0];
+  const title = locale?.title ?? `Route ${route.document_id}`;
+  const activities = route.activities?.join(" · ") ?? "Activity unknown";
+  const rawDescription = locale?.description
+    ? locale.description.replace(/<[^>]+>/g, "")
+    : "";
+  const summary =
+    rawDescription.length > 0
+      ? rawDescription.slice(0, 180).replace(/\s+\S*$/, "").trim()
+      : "";
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="space-y-1">
+          <CardTitle className="text-2xl">{title}</CardTitle>
+          <CardDescription className="text-sm">{activities}</CardDescription>
+        </div>
+        <CardAction>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/route/${route.document_id}`}>View</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      {summary && (
+        <CardContent className="text-sm text-muted-foreground">
+          {summary}
+          {summary.length < rawDescription.length && "…"}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
