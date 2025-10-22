@@ -10,6 +10,7 @@ import {
 import type { C2CRoute } from "@/lib/c2c";
 import { formatLocaleTitle, pickLocale } from "@/lib/c2c";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 type RouteCardProps = {
   route: C2CRoute;
@@ -35,6 +36,21 @@ export function RouteCard({ route }: RouteCardProps) {
         <div className="space-y-1">
           <CardTitle className="text-2xl">{title}</CardTitle>
           <CardDescription className="text-sm">{activities}</CardDescription>
+          {route.reliability_tier && (
+            <div>
+              <Badge
+                variant={
+                  route.reliability_tier === "great"
+                    ? "default"
+                    : route.reliability_tier === "medium"
+                      ? "secondary"
+                      : "outline"
+                }
+              >
+                Reliability: {route.reliability_tier.toUpperCase()}
+              </Badge>
+            </div>
+          )}
         </div>
         <CardAction>
           <Button asChild size="sm" variant="outline">
