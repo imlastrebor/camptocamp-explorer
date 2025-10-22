@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,32 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DEFAULT_ACTIVITIES } from "@/lib/c2c";
 import { AREA_OPTIONS, AreaOption, normaliseAreaIds } from "@/lib/areas";
 import { DEFAULT_LIMIT, LIMIT_OPTIONS } from "@/lib/search";
 
-const ACTIVITY_OPTIONS = [
-  {
-    label: "Alpine · Rock · Ski",
-    value: DEFAULT_ACTIVITIES,
-  },
-  {
-    label: "Alpine climbing",
-    value: "alpine_climbing",
-  },
-  {
-    label: "Rock climbing",
-    value: "rock_climbing",
-  },
-  {
-    label: "Ski touring",
-    value: "skitouring",
-  },
-];
-
 type FiltersProps = {
   initialQuery: string;
-  initialActivity: string;
   initialLimit: number;
   selectedAreas: string[];
   defaultAreas: string[];
@@ -67,7 +46,6 @@ function orderAreas(ids: string[], options: AreaOption[]) {
 
 export function Filters({
   initialQuery,
-  initialActivity,
   initialLimit,
   selectedAreas,
   defaultAreas,
@@ -77,19 +55,7 @@ export function Filters({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const initialActivityValue = useMemo(() => {
-    const match = ACTIVITY_OPTIONS.find(
-      (option) => option.value === initialActivity,
-    );
-    return match ? match.value : "custom";
-  }, [initialActivity]);
-
   const [query, setQuery] = useState(initialQuery);
-  const [selectedActivity, setSelectedActivity] =
-    useState(initialActivityValue);
-  const [customActivity, setCustomActivity] = useState(
-    initialActivityValue === "custom" ? initialActivity : "",
-  );
   const [limit, setLimit] = useState(
     LIMIT_OPTIONS.includes(initialLimit) ? initialLimit : DEFAULT_LIMIT,
   );
@@ -101,15 +67,6 @@ export function Filters({
   useEffect(() => {
     setQuery(initialQuery);
   }, [initialQuery]);
-
-  useEffect(() => {
-    setSelectedActivity(initialActivityValue);
-    if (initialActivityValue !== "custom") {
-      setCustomActivity("");
-    } else {
-      setCustomActivity(initialActivity);
-    }
-  }, [initialActivity, initialActivityValue]);
 
   useEffect(() => {
     setLimit(LIMIT_OPTIONS.includes(initialLimit) ? initialLimit : DEFAULT_LIMIT);
@@ -145,12 +102,6 @@ export function Filters({
       params.set("q", trimmedQuery);
     }
 
-    const activityValue =
-      selectedActivity === "custom" ? customActivity.trim() : selectedActivity;
-    if (activityValue) {
-      params.set("act", activityValue);
-    }
-
     if (limit !== DEFAULT_LIMIT) {
       params.set("limit", String(limit));
     }
@@ -171,16 +122,12 @@ export function Filters({
     });
   }
 
-  const isCustomActivity = selectedActivity === "custom";
-  const disableSubmit =
-    isPending || (isCustomActivity && customActivity.trim().length === 0);
-
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-xl">Filters</CardTitle>
         <CardDescription>
-          Server-rendered search powered by URL parameters.
+          Powder-focused search — ski touring only, filtered by data quality.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -200,37 +147,6 @@ export function Filters({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="act">
-                Activity
-              </label>
-              <Select
-                value={selectedActivity}
-                onValueChange={setSelectedActivity}
-                name="act-select"
-              >
-                <SelectTrigger id="act">
-                  <SelectValue placeholder="Select activity" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTIVITY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">Custom...</SelectItem>
-                </SelectContent>
-              </Select>
-              {isCustomActivity && (
-                <Input
-                  aria-label="Custom activities"
-                  placeholder="e.g. ice_climbing"
-                  value={customActivity}
-                  onChange={(event) => setCustomActivity(event.target.value)}
-                />
-              )}
             </div>
 
             <div className="flex flex-col gap-2">
@@ -259,7 +175,9 @@ export function Filters({
           <div className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-sm font-medium text-foreground">Areas</span>
+                <span className="text-sm font-medium text-foreground">
+                  Areas
+                </span>
                 <p className="text-xs text-muted-foreground">
                   Choose the massifs to include. Leave unchanged for the default mix.
                 </p>
@@ -303,8 +221,14 @@ export function Filters({
             </div>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-muted-foreground">
+              Activity is locked to <strong>ski touring</strong> with required metadata only.
+            </span>
+          </div>
+
           <div className="flex gap-2 sm:justify-end">
-            <Button type="submit" className="sm:w-fit" disabled={disableSubmit}>
+            <Button type="submit" className="sm:w-fit" disabled={isPending}>
               {isPending ? "Filtering..." : "Apply filters"}
             </Button>
           </div>

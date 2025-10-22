@@ -2,10 +2,7 @@ import Link from "next/link";
 import { Filters } from "@/components/Filters";
 import { RouteCard } from "@/components/RouteCard";
 import { Button } from "@/components/ui/button";
-import {
-  DEFAULT_ACTIVITIES,
-  listRoutes,
-} from "@/lib/c2c";
+import { listRoutes } from "@/lib/c2c";
 import {
   AREA_OPTIONS,
   DEFAULT_AREA_IDS,
@@ -71,7 +68,6 @@ export default async function Home({
 
   const qRaw = toSingleValue(params.q);
   const q = qRaw?.trim() ?? "";
-  const act = toSingleValue(params.act)?.trim() || DEFAULT_ACTIVITIES;
   const limit = sanitizeLimit(toSingleValue(params.limit));
   const offset = sanitizeOffset(toSingleValue(params.offset), limit);
 
@@ -81,7 +77,6 @@ export default async function Home({
 
   let data = await listRoutes({
     q,
-    act,
     limit,
     offset,
     areas: areaIds,
@@ -102,7 +97,6 @@ export default async function Home({
     if (fallbackQuery && fallbackQuery !== q) {
       let fallbackData = await listRoutes({
         q: fallbackQuery,
-        act,
         limit,
         offset,
         areas: areaIds,
@@ -113,7 +107,6 @@ export default async function Home({
       if (fallbackData.total === 0 && offset > 0) {
         fallbackData = await listRoutes({
           q: fallbackQuery,
-          act,
           limit,
           offset: 0,
           areas: areaIds,
@@ -150,7 +143,6 @@ export default async function Home({
     const nextParams = new URLSearchParams();
 
     if (q) nextParams.set("q", q);
-    if (act) nextParams.set("act", act);
     if (limit !== DEFAULT_LIMIT) nextParams.set("limit", String(limit));
     nextParams.set("offset", String(newOffset));
     if (hasExplicitAreas) {
@@ -180,7 +172,6 @@ export default async function Home({
 
       <Filters
         initialQuery={q}
-        initialActivity={act}
         initialLimit={limit}
         selectedAreas={areaIds}
         defaultAreas={DEFAULT_AREA_IDS}
@@ -212,7 +203,7 @@ export default async function Home({
 
         {data.documents.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
-            Adjust your search or try a different activity preset.
+            Adjust your search keywords or area selection to find skiable routes.
           </div>
         ) : (
           <div className="space-y-4">

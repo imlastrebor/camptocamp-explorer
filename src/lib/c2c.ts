@@ -19,6 +19,18 @@ export type C2CRoute = {
   locales?: Locale[];
   elevation_min?: number;
   elevation_max?: number;
+  geometry?: {
+    geom?: string;
+    has_geom_detail?: boolean;
+  };
+  orientations?: string[];
+  configuration?: string[];
+  route_types?: string[];
+  slope_max?: number | null;
+  ski_rating?: string | null;
+  ski_exposition?: string | null;
+  height_diff_difficulties?: number | null;
+  reliability_tier?: ReliabilityTier;
 };
 
 type PaginatedResponse<T> = {
@@ -30,7 +42,6 @@ type PaginatedResponse<T> = {
 
 type ListRoutesOptions = {
   q?: string;
-  act?: string;
   limit?: number;
   offset?: number;
   areas?: ReadonlyArray<string | number>;
@@ -67,8 +78,7 @@ const [MAX_X, MAX_Y] = projectLonLatToWebMercator(
 );
 const CHAMONIX_BBOX = `${MIN_X},${MIN_Y},${MAX_X},${MAX_Y}`;
 
-export const DEFAULT_ACTIVITIES =
-  "alpine_climbing,rock_climbing,skitouring";
+export const REQUIRED_ACTIVITY = "skitouring";
 
 const PREFERRED_LOCALES = ["en", "fr", "it", "es"];
 
@@ -105,6 +115,8 @@ export function formatLocaleTitle(locale?: Locale) {
   return title ?? prefix ?? undefined;
 }
 
+export type ReliabilityTier = "poor" | "medium" | "great";
+
 export type ListRoutesResult = PaginatedResponse<C2CRoute> & {
   strategy: "areas" | "bbox";
   areaIds?: string[];
@@ -135,12 +147,67 @@ async function fetchRoutes(
   return response.json();
 }
 
+function determineReliabilityTier(route: C2CRoute): ReliabilityTier | null {
+  const activities = route.activities ?? [];
+  if (!activities.includes(REQUIRED_ACTIVITY)) {
+    return null;
+  }
+
+  const hasElevation =
+    typeof route.elevation_min === "number" &&
+    typeof route.elevation_max === "number";
+  const hasOrientation =
+    Array.isArray(route.orientations) && route.orientations.length > 0;
+  const hasGeometry = Boolean(route.geometry?.geom);
+
+  if (!(hasElevation && hasOrientation && hasGeometry)) {
+    return null;
+  }
+
+  const hasTerrainContext =
+    (Array.isArray(route.configuration) && route.configuration.length > 0) ||
+    (Array.isArray(route.route_types) && route.route_types.length > 0) ||
+    typeof route.height_diff_difficulties === "number";
+
+  const hasSlopeInfo =
+    route.slope_max != null ||
+    route.ski_rating != null ||
+    route.ski_exposition != null;
+
+  if (hasTerrainContext && hasSlopeInfo) {
+    return "great";
+  }
+  if (hasTerrainContext) {
+    return "medium";
+  }
+  return "poor";
+}
+
+function postProcessRoutes<T extends C2CRoute>(
+  data: PaginatedResponse<T>,
+): { result: PaginatedResponse<C2CRoute>; anyMatched: boolean } {
+  const documents = data.documents
+    .map((route) => {
+      const tier = determineReliabilityTier(route);
+      if (!tier) return null;
+      return { ...route, reliability_tier: tier };
+    })
+    .filter((value): value is C2CRoute => value !== null);
+
+  return {
+    result: {
+      ...data,
+      documents,
+    },
+    anyMatched: documents.length > 0,
+  };
+}
+
 export async function listRoutes(
   options: ListRoutesOptions = {},
 ): Promise<ListRoutesResult> {
   const {
     q,
-    act = DEFAULT_ACTIVITIES,
     limit = DEFAULT_LIMIT,
     offset = 0,
     areas,
@@ -151,7 +218,7 @@ export async function listRoutes(
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
-  params.set("act", act);
+  params.set("act", REQUIRED_ACTIVITY);
 
   if (q) {
     params.set("q", q);
@@ -166,15 +233,12 @@ export async function listRoutes(
     areaParams.set("a", serializedAreas.join(","));
 
     try {
-      const areaData = await fetchRoutes(areaParams);
+      const areaDataRaw = await fetchRoutes(areaParams);
+      const { result: areaResult, anyMatched } = postProcessRoutes(areaDataRaw);
 
-      if (
-        areaData.total > 0 ||
-        !fallbackToBbox ||
-        !shouldFallbackWhenEmpty
-      ) {
+      if (anyMatched || !fallbackToBbox || !shouldFallbackWhenEmpty) {
         return {
-          ...areaData,
+          ...areaResult,
           strategy: "areas",
           areaIds: serializedAreas,
         };
@@ -188,10 +252,11 @@ export async function listRoutes(
 
   const bboxParams = new URLSearchParams(params);
   bboxParams.set("bbox", CHAMONIX_BBOX);
-  const bboxData = await fetchRoutes(bboxParams);
+  const bboxDataRaw = await fetchRoutes(bboxParams);
+  const { result: bboxResult } = postProcessRoutes(bboxDataRaw);
 
   return {
-    ...bboxData,
+    ...bboxResult,
     strategy: serializedAreas ? "bbox" : "bbox",
     areaIds: serializedAreas,
   };
