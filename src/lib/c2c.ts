@@ -30,6 +30,9 @@ type ListRoutesOptions = {
   act?: string;
   limit?: number;
   offset?: number;
+  areas?: ReadonlyArray<string | number>;
+  fallbackToBbox?: boolean;
+  fallbackWhenEmpty?: boolean;
 };
 
 const EARTH_RADIUS = 6378137;
@@ -63,6 +66,8 @@ const CHAMONIX_BBOX = `${MIN_X},${MIN_Y},${MAX_X},${MAX_Y}`;
 
 export const DEFAULT_ACTIVITIES =
   "alpine_climbing,rock_climbing,skitouring";
+
+export const DEFAULT_AREA_IDS = ["14410", "14404"];
 
 const PREFERRED_LOCALES = ["en", "fr", "it", "es"];
 
@@ -99,25 +104,25 @@ export function formatLocaleTitle(locale?: Locale) {
   return title ?? prefix ?? undefined;
 }
 
-export async function listRoutes(
-  options: ListRoutesOptions = {},
+export type ListRoutesResult = PaginatedResponse<C2CRoute> & {
+  strategy: "areas" | "bbox";
+  areaIds?: string[];
+};
+
+function serializeAreaIds(areas?: ReadonlyArray<string | number>) {
+  if (!areas) return undefined;
+  const cleaned = areas
+    .map((value) => String(value).trim())
+    .filter((value) => value.length > 0);
+  if (cleaned.length === 0) return undefined;
+  return cleaned;
+}
+
+async function fetchRoutes(
+  params: URLSearchParams,
 ): Promise<PaginatedResponse<C2CRoute>> {
-  const {
-    q,
-    act = DEFAULT_ACTIVITIES,
-    limit = DEFAULT_LIMIT,
-    offset = 0,
-  } = options;
-
   const url = new URL(`${BASE_URL}/routes`);
-  url.searchParams.set("bbox", CHAMONIX_BBOX);
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("offset", String(offset));
-  url.searchParams.set("act", act);
-
-  if (q) {
-    url.searchParams.set("q", q);
-  }
+  url.search = params.toString();
 
   const response = await fetch(url.toString(), {
     next: { revalidate: 3600 },
@@ -129,6 +134,68 @@ export async function listRoutes(
   }
 
   return response.json();
+}
+
+export async function listRoutes(
+  options: ListRoutesOptions = {},
+): Promise<ListRoutesResult> {
+  const {
+    q,
+    act = DEFAULT_ACTIVITIES,
+    limit = DEFAULT_LIMIT,
+    offset = 0,
+    areas,
+    fallbackToBbox = true,
+    fallbackWhenEmpty,
+  } = options;
+
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  params.set("act", act);
+
+  if (q) {
+    params.set("q", q);
+  }
+
+  const serializedAreas = serializeAreaIds(areas);
+  const shouldFallbackWhenEmpty =
+    fallbackWhenEmpty ?? (serializedAreas ? !q : false);
+
+  if (serializedAreas && serializedAreas.length > 0) {
+    const areaParams = new URLSearchParams(params);
+    areaParams.set("a", serializedAreas.join(","));
+
+    try {
+      const areaData = await fetchRoutes(areaParams);
+
+      if (
+        areaData.total > 0 ||
+        !fallbackToBbox ||
+        !shouldFallbackWhenEmpty
+      ) {
+        return {
+          ...areaData,
+          strategy: "areas",
+          areaIds: serializedAreas,
+        };
+      }
+    } catch (error) {
+      if (!fallbackToBbox) {
+        throw error;
+      }
+    }
+  }
+
+  const bboxParams = new URLSearchParams(params);
+  bboxParams.set("bbox", CHAMONIX_BBOX);
+  const bboxData = await fetchRoutes(bboxParams);
+
+  return {
+    ...bboxData,
+    strategy: serializedAreas ? "bbox" : "bbox",
+    areaIds: serializedAreas,
+  };
 }
 
 export async function getRoute(id: string): Promise<C2CRoute> {

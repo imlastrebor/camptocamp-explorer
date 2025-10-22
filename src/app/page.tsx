@@ -2,7 +2,11 @@ import Link from "next/link";
 import { Filters } from "@/components/Filters";
 import { RouteCard } from "@/components/RouteCard";
 import { Button } from "@/components/ui/button";
-import { DEFAULT_ACTIVITIES, listRoutes } from "@/lib/c2c";
+import {
+  DEFAULT_ACTIVITIES,
+  DEFAULT_AREA_IDS,
+  listRoutes,
+} from "@/lib/c2c";
 import { DEFAULT_LIMIT, LIMIT_OPTIONS } from "@/lib/search";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -60,9 +64,25 @@ export default async function Home({
   const limit = sanitizeLimit(toSingleValue(params.limit));
   const offset = sanitizeOffset(toSingleValue(params.offset), limit);
 
-  let data = await listRoutes({ q, act, limit, offset });
+  const areaIds = DEFAULT_AREA_IDS;
+
+  let data = await listRoutes({
+    q,
+    act,
+    limit,
+    offset,
+    areas: areaIds,
+    fallbackToBbox: true,
+    fallbackWhenEmpty: !q,
+  });
   let effectiveOffset = data.offset ?? offset;
   let fallbackMessage: string | undefined;
+  let areaFallbackMessage: string | undefined;
+
+  if (data.strategy === "bbox" && data.areaIds && data.areaIds.length > 0) {
+    areaFallbackMessage =
+      "Area lookup returned no results; falling back to legacy map bounds.";
+  }
 
   if (q && data.total === 0) {
     const fallbackQuery = deriveFallbackQuery(q);
@@ -72,6 +92,9 @@ export default async function Home({
         act,
         limit,
         offset,
+        areas: areaIds,
+        fallbackToBbox: true,
+        fallbackWhenEmpty: false,
       });
 
       if (fallbackData.total === 0 && offset > 0) {
@@ -80,6 +103,9 @@ export default async function Home({
           act,
           limit,
           offset: 0,
+          areas: areaIds,
+          fallbackToBbox: true,
+          fallbackWhenEmpty: false,
         });
       }
 
@@ -87,6 +113,16 @@ export default async function Home({
         data = fallbackData;
         effectiveOffset = fallbackData.offset ?? 0;
         fallbackMessage = `No exact matches for "${q}". Showing results for "${fallbackQuery}".`;
+        if (
+          fallbackData.strategy === "bbox" &&
+          fallbackData.areaIds &&
+          fallbackData.areaIds.length > 0
+        ) {
+          areaFallbackMessage =
+            "Area lookup returned no results; falling back to legacy map bounds.";
+        } else {
+          areaFallbackMessage = undefined;
+        }
       }
     }
   }
@@ -141,6 +177,12 @@ export default async function Home({
         {fallbackMessage && (
           <div className="rounded-md border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
             {fallbackMessage}
+          </div>
+        )}
+
+        {areaFallbackMessage && (
+          <div className="rounded-md border border-dashed border-border px-4 py-3 text-xs text-muted-foreground">
+            {areaFallbackMessage}
           </div>
         )}
 

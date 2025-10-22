@@ -6,7 +6,7 @@ A **minimal** Next.js app that lists Camptocamp routes around Chamonix using the
 ---
 
 ## 🎯 MVP Scope (Keep it simple)
-- **Routes List**: Fetch and render a paginated list of routes for a Chamonix bounding box.
+- **Routes List**: Fetch and render a paginated list of routes for a Chamonix area selection (Mont-Blanc / Aiguilles Rouges), with bbox fallback.
 - **Route Details**: Simple detail page for a route by ID.
 - **Basic Filters (optional)**: Activity and a free-text query.
 - **Fast by default**: Server Components + incremental caching.
@@ -92,22 +92,28 @@ type Paginated<T> = {
   offset: number;
 };
 
-// Chamonix valley + massif-ish bbox (simple, adjustable)
-const CHAM_BBOX = '6.70,45.85,7.15,46.10'; // lonmin,latmin,lonmax,latmax
+// Mont-Blanc + Aiguilles Rouges area IDs (fallbacks to bbox internally)
+const DEFAULT_AREAS = ['14410', '14404'];
 
 export async function listRoutes({
   q,
   act = 'alpine_climbing,rock_climbing,skitouring',
   limit = 50,
-  offset = 0
+  offset = 0,
+  areas = DEFAULT_AREAS
 }: {
   q?: string;
   act?: string;
   limit?: number;
   offset?: number;
+  areas?: string[];
 }): Promise<Paginated<C2CRoute>> {
   const url = new URL(`${BASE}/routes`);
-  url.searchParams.set('bbox', CHAM_BBOX);
+  if (areas?.length) {
+    url.searchParams.set('a', areas.join(','));
+  } else {
+    url.searchParams.set('bbox', '6.70,45.85,7.15,46.10');
+  }
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('offset', String(offset));
   url.searchParams.set('act', act);
@@ -239,4 +245,3 @@ export default async function RoutePage({ params }: { params: { id: string } }) 
 
 ## 📄 License
 MIT
-
