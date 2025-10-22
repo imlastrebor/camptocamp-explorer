@@ -1,4 +1,7 @@
+import { normaliseAreaIds } from "./areas";
 import { DEFAULT_LIMIT } from "./search";
+
+export { DEFAULT_AREA_IDS } from "./areas";
 
 const BASE_URL = "https://api.camptocamp.org";
 
@@ -67,8 +70,6 @@ const CHAMONIX_BBOX = `${MIN_X},${MIN_Y},${MAX_X},${MAX_Y}`;
 export const DEFAULT_ACTIVITIES =
   "alpine_climbing,rock_climbing,skitouring";
 
-export const DEFAULT_AREA_IDS = ["14410", "14404"];
-
 const PREFERRED_LOCALES = ["en", "fr", "it", "es"];
 
 export function pickLocale(
@@ -111,9 +112,7 @@ export type ListRoutesResult = PaginatedResponse<C2CRoute> & {
 
 function serializeAreaIds(areas?: ReadonlyArray<string | number>) {
   if (!areas) return undefined;
-  const cleaned = areas
-    .map((value) => String(value).trim())
-    .filter((value) => value.length > 0);
+  const cleaned = normaliseAreaIds(areas);
   if (cleaned.length === 0) return undefined;
   return cleaned;
 }

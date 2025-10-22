@@ -92,7 +92,7 @@ type Paginated<T> = {
   offset: number;
 };
 
-// Mont-Blanc + Aiguilles Rouges area IDs (fallbacks to bbox internally)
+// Mont-Blanc + Aiguilles Rouges defaults (fallback to bbox if empty)
 const DEFAULT_AREAS = ['14410', '14404'];
 
 export async function listRoutes({

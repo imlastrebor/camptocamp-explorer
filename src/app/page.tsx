@@ -4,9 +4,13 @@ import { RouteCard } from "@/components/RouteCard";
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_ACTIVITIES,
-  DEFAULT_AREA_IDS,
   listRoutes,
 } from "@/lib/c2c";
+import {
+  AREA_OPTIONS,
+  DEFAULT_AREA_IDS,
+  normaliseAreaIds,
+} from "@/lib/areas";
 import { DEFAULT_LIMIT, LIMIT_OPTIONS } from "@/lib/search";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -51,6 +55,13 @@ function deriveFallbackQuery(query: string) {
   return tokens[0];
 }
 
+function parseAreasParam(value?: string | string[]) {
+  if (!value) return [];
+  const parts = Array.isArray(value) ? value : [value];
+  const flattened = parts.flatMap((part) => part.split(","));
+  return normaliseAreaIds(flattened);
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -64,7 +75,9 @@ export default async function Home({
   const limit = sanitizeLimit(toSingleValue(params.limit));
   const offset = sanitizeOffset(toSingleValue(params.offset), limit);
 
-  const areaIds = DEFAULT_AREA_IDS;
+  const parsedAreas = parseAreasParam(params.areas);
+  const hasExplicitAreas = parsedAreas.length > 0;
+  const areaIds = hasExplicitAreas ? parsedAreas : DEFAULT_AREA_IDS;
 
   let data = await listRoutes({
     q,
@@ -140,6 +153,9 @@ export default async function Home({
     if (act) nextParams.set("act", act);
     if (limit !== DEFAULT_LIMIT) nextParams.set("limit", String(limit));
     nextParams.set("offset", String(newOffset));
+    if (hasExplicitAreas) {
+      nextParams.set("areas", areaIds.join(","));
+    }
 
     return `/?${nextParams.toString()}`;
   };
@@ -162,7 +178,15 @@ export default async function Home({
         </p>
       </header>
 
-      <Filters />
+      <Filters
+        initialQuery={q}
+        initialActivity={act}
+        initialLimit={limit}
+        selectedAreas={areaIds}
+        defaultAreas={DEFAULT_AREA_IDS}
+        availableAreas={AREA_OPTIONS}
+        hasExplicitAreas={hasExplicitAreas}
+      />
 
       <section className="space-y-4">
         <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
